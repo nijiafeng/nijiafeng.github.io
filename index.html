@@ -32,14 +32,14 @@
             vertical-align: middle;
             display: inline-block;
             line-height: 1;
-            margin: 0 2px; /* 增加左右微调 */
+            margin: 0 2px;
         }
         .inequality-question { margin-bottom: 6px; font-size: 15px; }
         /* 调整括号间距，防止重叠 */
         .parentheses { 
             position: relative; 
             display: inline-block; 
-            margin: 0 8px; /* 增加左右外边距，为伪元素腾出空间，避免与相邻字符重叠 */
+            margin: 0 8px;
         }
         .parentheses::before { 
             content: "("; 
@@ -170,7 +170,7 @@
 
             // 辅助生成一位数或两位数（1-99）
             const oneOrTwoDigit = () => getRandomInt(1, 99);
-            // 一位数 (1-9)
+            // 一位数 (1-9) - 注意：用于非除法的地方可以包含1
             const oneDigit = () => getRandomInt(1, 9);
             // 两位数 (10-99)
             const twoDigit = () => getRandomInt(10, 99);
@@ -292,12 +292,13 @@
             let answer12 = quotient - num;
             items.push({ html: question12, answer: answer12 });
 
-            // 13-16. 有余数除法4道（只显示算式和等号，无横线省略号）
+            // 13-16. 有余数除法4道（除数范围3-9，避免出现1）
             for (let i = 0; i < 4; i++) {
-                divisor = getRandomInt(3, 9);
+                divisor = getRandomInt(3, 9);  // 除数从3开始，排除1
                 quotient = getRandomInt(2, 9);
                 let remainder = getRandomInt(1, divisor-1);
                 dividend = divisor * quotient + remainder;
+                // 保证被除数不超过200（其实两位数即可，但保留原范围）
                 while (dividend > 200) {
                     divisor = getRandomInt(3, 9);
                     quotient = getRandomInt(2, 9);
@@ -308,37 +309,30 @@
                 items.push({ html: question, answer: {quotient, remainder} });
             }
 
-            // 17. 空格设在被除数
-            divisor = oneDigit();
-            quotient = oneDigit();
-            let remainder = getRandomInt(1, divisor-1);
-            dividend = divisor * quotient + remainder;
-            let question17 = `<span class="parentheses"><span class="blank"></span></span> ÷ ${divisor} = ${quotient}<span class="ellipsis">……</span>${remainder}`;
-            items.push({ html: question17, answer: dividend });
-
-            // 18. 空格设在除数
-            divisor = oneDigit();
-            quotient = oneDigit();
-            remainder = getRandomInt(1, divisor-1);
-            dividend = divisor * quotient + remainder;
-            let question18 = `${dividend} ÷ <span class="parentheses"><span class="blank"></span></span> = ${quotient}<span class="ellipsis">……</span>${remainder}`;
-            items.push({ html: question18, answer: divisor });
-
-            // 19. 空格设在商
-            divisor = oneDigit();
-            quotient = oneDigit();
-            remainder = getRandomInt(1, divisor-1);
-            dividend = divisor * quotient + remainder;
-            let question19 = `${dividend} ÷ ${divisor} = <span class="parentheses"><span class="blank"></span></span><span class="ellipsis">……</span>${remainder}`;
-            items.push({ html: question19, answer: quotient });
-
-            // 20. 空格设在余数
-            divisor = oneDigit();
-            quotient = oneDigit();
-            remainder = getRandomInt(1, divisor-1);
-            dividend = divisor * quotient + remainder;
-            let question20 = `${dividend} ÷ ${divisor} = ${quotient}<span class="ellipsis">……</span><span class="parentheses"><span class="blank"></span></span>`;
-            items.push({ html: question20, answer: remainder });
+            // 17-20. 四道带括号的题，被除数在100以内，除数2-9，商1-9，余数随机
+            for (let idx = 0; idx < 4; idx++) {
+                // 除数不能为1，取2-9
+                let divisor = getRandomInt(2, 9);
+                // 商取1-9
+                let quotient = getRandomInt(1, 9);
+                // 余数 1 到 divisor-1
+                let remainder = getRandomInt(1, divisor - 1);
+                let dividend = divisor * quotient + remainder; // 被除数最大 9*9+8=89，最小 2*1+1=3
+                let questionHtml;
+                if (idx === 0) { // 空格在被除数
+                    questionHtml = `<span class="parentheses"><span class="blank"></span></span> ÷ ${divisor} = ${quotient}<span class="ellipsis">……</span>${remainder}`;
+                    items.push({ html: questionHtml, answer: dividend });
+                } else if (idx === 1) { // 空格在除数
+                    questionHtml = `${dividend} ÷ <span class="parentheses"><span class="blank"></span></span> = ${quotient}<span class="ellipsis">……</span>${remainder}`;
+                    items.push({ html: questionHtml, answer: divisor });
+                } else if (idx === 2) { // 空格在商
+                    questionHtml = `${dividend} ÷ ${divisor} = <span class="parentheses"><span class="blank"></span></span><span class="ellipsis">……</span>${remainder}`;
+                    items.push({ html: questionHtml, answer: quotient });
+                } else { // 空格在余数
+                    questionHtml = `${dividend} ÷ ${divisor} = ${quotient}<span class="ellipsis">……</span><span class="parentheses"><span class="blank"></span></span>`;
+                    items.push({ html: questionHtml, answer: remainder });
+                }
+            }
 
             // 随机打乱数组 (Fisher-Yates)
             for (let i = items.length - 1; i > 0; i--) {
