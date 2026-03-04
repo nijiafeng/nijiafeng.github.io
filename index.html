@@ -1,0 +1,600 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>二下计算练习（207、208）- 随机出题系统</title>
+    <!-- 引入 jsPDF 和 html2canvas 用于 PDF 下载功能 -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
+    <style>
+        /* 全局样式与打印优化 */
+        * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Microsoft YaHei', 'SimHei', sans-serif; }
+        body { background-color: #f5f5f5; padding: 15px; line-height: 1.5; color: #333; }
+        .container { max-width: 210mm; min-height: 290mm; margin: 0 auto; background-color: white; padding: 3mm 15mm 8mm 15mm; box-shadow: 0 0 10px rgba(0,0,0,0.1); position: relative; }
+        .header { text-align: center; margin-bottom: 5px; padding-bottom: 3px; }
+        h1 { color: #2c3e50; font-size: 30px; margin-bottom: 3px; margin-top: 0; font-family: 'STKaiti', 'KaiTi', '楷体', '华文楷体', 'Microsoft YaHei', serif; font-weight: bold; letter-spacing: 2px; padding: 6px 0; border-bottom: none; border-top: none; }
+        .info { display: flex; justify-content: space-between; margin-bottom: 10px; font-size: 14px; margin-top: -3px; }
+        .section { margin-bottom: 15px; page-break-inside: avoid; }
+        h2 { color: #4a6fa5; font-size: 18px; padding-bottom: 6px; border-bottom: 1px dashed #ddd; margin-bottom: 10px; }
+        .question-group { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-bottom: 8px; }
+        /* 修改 .question 使其内容垂直居中 */
+        .question { 
+            padding: 6px; 
+            font-size: 15px; 
+            display: flex; 
+            align-items: center; 
+            min-height: 32px;
+            flex-wrap: wrap;
+        }
+        /* 针对省略号单独设置垂直对齐，确保与等号齐平 */
+        .ellipsis {
+            vertical-align: middle;
+            display: inline-block;
+            line-height: 1;
+            margin: 0 2px; /* 增加左右微调 */
+        }
+        .inequality-question { margin-bottom: 6px; font-size: 15px; }
+        /* 调整括号间距，防止重叠 */
+        .parentheses { 
+            position: relative; 
+            display: inline-block; 
+            margin: 0 8px; /* 增加左右外边距，为伪元素腾出空间，避免与相邻字符重叠 */
+        }
+        .parentheses::before { 
+            content: "("; 
+            position: absolute; 
+            left: -8px; 
+            font-size: 16px; 
+        }
+        .parentheses::after { 
+            content: ")"; 
+            position: absolute; 
+            right: -8px; 
+            font-size: 16px; 
+        }
+        .parentheses .blank { 
+            display: inline-block; 
+            width: 20px;
+            height: 20px; 
+            margin: 0 2px; 
+        }
+        .division-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px; }
+        .division-item { display: flex; flex-direction: column; min-height: 150px; }
+        .division-question { font-size: 15px; margin-bottom: 6px; height: 22px; }
+        .division-space { flex-grow: 1; min-height: 125px; position: relative; border: none; }
+        .division-space::before { content: ""; position: absolute; left: 0; top: 0; width: 100%; height: 100%; border: 2px dashed #999; border-radius: 4px; box-sizing: border-box; pointer-events: none; }
+        .calculation-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 12px; }
+        .calculation-row.second-row { margin-top: 20px; }
+        .calculation-item { display: flex; flex-direction: column; min-height: 150px; }
+        .calculation-question { font-size: 15px; margin-bottom: 6px; height: 22px; }
+        .calculation-space { flex-grow: 1; min-height: 125px; position: relative; border: none; }
+        .calculation-space::before { content: ""; position: absolute; left: 0; top: 0; width: 100%; height: 100%; border: 2px dashed #999; border-radius: 4px; box-sizing: border-box; pointer-events: none; }
+        .verification-item { display: flex; flex-direction: row; min-height: 150px; gap: 8px; }
+        .verification-question { font-size: 15px; margin-bottom: 6px; height: 22px; width: 100%; }
+        .verification-container { display: flex; flex-direction: row; width: 100%; gap: 8px; }
+        .verification-calculation-space { flex: 1; min-height: 125px; position: relative; border: none; }
+        .verification-space { flex: 1; min-height: 125px; position: relative; border: none; }
+        .verification-calculation-space::before, .verification-space::before { content: ""; position: absolute; left: 0; top: 0; width: 100%; height: 100%; border: 2px dashed #999; border-radius: 4px; box-sizing: border-box; pointer-events: none; }
+        .star { color: #e74c3c; font-weight: bold; margin-right: 5px; }
+        .footer { text-align: center; margin-top: 15px; padding-top: 12px; border-top: 1px solid #ddd; color: #7f8c8d; font-size: 14px; }
+        .controls { text-align: center; margin-bottom: 15px; display: flex; justify-content: center; gap: 12px; flex-wrap: wrap; }
+        .control-btn { background-color: #4a6fa5; color: white; border: none; padding: 10px 20px; font-size: 15px; border-radius: 4px; cursor: pointer; transition: background-color 0.3s; min-width: 140px; }
+        .control-btn:hover { background-color: #3a5a80; }
+        .control-btn.generate { background-color: #27ae60; }
+        .control-btn.generate:hover { background-color: #219653; }
+        .control-btn.print { background-color: #e67e22; }
+        .control-btn.print:hover { background-color: #d35400; }
+        /* 打印样式优化 */
+        @media print {
+            body { background-color: white; padding: 0; }
+            .container { box-shadow: none; padding: 5mm 12mm 5mm 12mm; max-width: 100%; min-height: auto; }
+            .controls { display: none; }
+            h1 { color: #2c3e50; -webkit-text-fill-color: #2c3e50; background: none; text-shadow: none; font-size: 28px; padding: 4px 0; margin-bottom: 2px; }
+            .info { margin-bottom: 8px; font-size: 13px; }
+            .section { margin-bottom: 12px; }
+            h2 { font-size: 17px; margin-bottom: 8px; padding-bottom: 4px; }
+            .question-group { gap: 8px; margin-bottom: 6px; }
+            .question { font-size: 14px; padding: 4px; }
+            .inequality-question { font-size: 14px; padding: 4px; }
+            .division-row, .calculation-row { gap: 10px; margin-bottom: 10px; }
+            .division-item, .calculation-item { min-height: 145px; }
+            .division-space, .calculation-space, .verification-calculation-space, .verification-space { min-height: 120px; }
+            .verification-item { min-height: 145px; gap: 6px; }
+            .verification-container { gap: 6px; }
+            .division-space::before, .calculation-space::before, .verification-calculation-space::before, .verification-space::before { border-color: #666 !important; border-width: 1.5px; }
+            .footer { margin-top: 10px; padding-top: 8px; font-size: 13px; }
+        }
+        /* 移动端适配 */
+        @media (max-width: 768px) {
+            .question-group { grid-template-columns: repeat(2, 1fr); }
+            .division-row, .calculation-row { grid-template-columns: repeat(2, 1fr); }
+            .container { padding: 5mm; }
+            .verification-item { flex-direction: column; }
+            .verification-container { flex-direction: column; }
+        }
+        /* 加载动画 */
+        .loading { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(255, 255, 255, 0.8); z-index: 1000; justify-content: center; align-items: center; flex-direction: column; }
+        .loading.show { display: flex; }
+        .spinner { border: 8px solid #f3f3f3; border-top: 8px solid #4a6fa5; border-radius: 50%; width: 60px; height: 60px; animation: spin 1s linear infinite; margin-bottom: 20px; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    </style>
+</head>
+<body>
+    <!-- PDF生成加载提示 -->
+    <div class="loading" id="loading"><div class="spinner"></div><p>正在生成PDF，请稍候...</p></div>
+    
+    <!-- 功能按钮 - 已删除“打印页面”按钮 -->
+    <div class="controls">
+        <button class="control-btn generate" id="generateQuestions">随机出题</button>
+        <button class="control-btn" id="downloadPdf">下载PDF</button>
+    </div>
+    
+    <!-- 主内容区：练习题卡片 -->
+    <div class="container" id="content">
+        <div class="header"><h1>二下计算练习（207、208）</h1></div>
+        <div class="info">
+            <div>班级：__________</div><div>姓名：__________</div><div>日期：__________</div><div>得分：__________</div>
+        </div>
+        
+        <!-- 第一部分：直接写出得数（20题，顺序随机） -->
+        <div class="section"><h2>一、直接写出得数（每题2分）</h2><div class="question-group" id="part1"></div></div>
+        
+        <!-- 第二大题：竖式计算1（有余数除法，8题，每题3分） -->
+        <div class="section"><h2>二、竖式计算1（每题3分，<strong>横线用尺！数位对齐！下同！</strong>）</h2>
+            <div class="division-row" id="part3-row1"></div>
+            <div class="division-row" id="part3-row2"></div>
+        </div>
+        
+        <!-- 第三大题：竖式计算2（带验算，8题） -->
+        <div class="section"><h2>三、竖式计算2（标记*的2题需要验算，每题6分，其余每题4分）</h2>
+            <div class="calculation-row" id="part4-row1"></div>
+            <div class="calculation-row second-row" id="part4-row2"></div>
+        </div>
+        
+        <div class="footer"><p>完成时间：__________分钟  检查人：__________</p><p>© 二下计算练习 - 共36题</p></div>
+    </div>
+
+    <script>
+        // 存储当前题目的答案 (可用于后续扩展或核对)
+        let currentAnswers = { part1: [], part3: [], part4: [] };
+
+        // 辅助函数：随机整数 [min,max]
+        function getRandomInt(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
+
+        // ========== 第一部分：直接写出得数 (20道，顺序随机) ==========
+        function generatePart1() {
+            const part1Container = document.getElementById('part1');
+            part1Container.innerHTML = '';
+            currentAnswers.part1 = [];
+
+            // 辅助生成一位数或两位数（1-99）
+            const oneOrTwoDigit = () => getRandomInt(1, 99);
+            // 一位数 (1-9)
+            const oneDigit = () => getRandomInt(1, 9);
+            // 两位数 (10-99)
+            const twoDigit = () => getRandomInt(10, 99);
+
+            // 临时数组，存放 { html, answer }
+            const items = [];
+
+            // 1. 一位数乘一位数加上一个数
+            let a = oneDigit(), b = oneDigit(), c = oneOrTwoDigit();
+            let question1 = `${a} × ${b} + ${c} =`;
+            let answer1 = a * b + c;
+            items.push({ html: question1, answer: answer1 });
+
+            // 2. 一位数乘一位数减去一个数
+            a = oneDigit(); b = oneDigit(); 
+            let maxC = a * b - 1;
+            c = getRandomInt(1, maxC);
+            let question2 = `${a} × ${b} - ${c} =`;
+            let answer2 = a * b - c;
+            items.push({ html: question2, answer: answer2 });
+
+            // 3. 两位数连加
+            let d1 = twoDigit(), d2 = twoDigit(), d3 = twoDigit();
+            let question3 = `${d1} + ${d2} + ${d3} =`;
+            let answer3 = d1 + d2 + d3;
+            items.push({ html: question3, answer: answer3 });
+
+            // 4. 两位数连减
+            let A = getRandomInt(70, 99);
+            let B = getRandomInt(10, 30);
+            let C = getRandomInt(10, 30);
+            while (A - B - C < 0) {
+                B = getRandomInt(10, 30);
+                C = getRandomInt(10, 30);
+            }
+            let question4 = `${A} - ${B} - ${C} =`;
+            let answer4 = A - B - C;
+            items.push({ html: question4, answer: answer4 });
+
+            // 5. 两位数加两位数再减两位数
+            A = twoDigit(); B = twoDigit(); 
+            C = getRandomInt(10, Math.min(99, A+B));
+            let question5 = `${A} + ${B} - ${C} =`;
+            let answer5 = A + B - C;
+            items.push({ html: question5, answer: answer5 });
+
+            // 6. 两位数减两位数再加两位数
+            A = twoDigit(); B = getRandomInt(10, A-10);
+            C = twoDigit();
+            let question6 = `${A} - ${B} + ${C} =`;
+            let answer6 = A - B + C;
+            items.push({ html: question6, answer: answer6 });
+
+            // 7. 一个数 + 一位数×一位数
+            let num = oneOrTwoDigit();
+            a = oneDigit(); b = oneDigit();
+            let question7 = `${num} + ${a} × ${b} =`;
+            let answer7 = num + a * b;
+            items.push({ html: question7, answer: answer7 });
+
+            // 8. 一个数 - 一位数×一位数
+            num = oneOrTwoDigit();
+            a = oneDigit(); b = oneDigit();
+            while (num < a * b) {
+                num = oneOrTwoDigit();
+            }
+            let question8 = `${num} - ${a} × ${b} =`;
+            let answer8 = num - a * b;
+            items.push({ html: question8, answer: answer8 });
+
+            // 9. 两位数 + 表内除法
+            let dividend, divisor, quotient;
+            do {
+                divisor = oneDigit();
+                quotient = oneDigit();
+                dividend = divisor * quotient;
+            } while (dividend > 81);
+            let two = twoDigit();
+            let question9 = `${two} + ${dividend} ÷ ${divisor} =`;
+            let answer9 = two + quotient;
+            items.push({ html: question9, answer: answer9 });
+
+            // 10. 两位数 - 表内除法
+            do {
+                divisor = oneDigit();
+                quotient = oneDigit();
+                dividend = divisor * quotient;
+            } while (dividend > 81);
+            two = twoDigit();
+            while (two < quotient) {
+                two = twoDigit();
+            }
+            let question10 = `${two} - ${dividend} ÷ ${divisor} =`;
+            let answer10 = two - quotient;
+            items.push({ html: question10, answer: answer10 });
+
+            // 11. 表内除法 + 一个数
+            do {
+                divisor = oneDigit();
+                quotient = oneDigit();
+                dividend = divisor * quotient;
+            } while (dividend > 81);
+            num = oneOrTwoDigit();
+            let question11 = `${dividend} ÷ ${divisor} + ${num} =`;
+            let answer11 = quotient + num;
+            items.push({ html: question11, answer: answer11 });
+
+            // 12. 表内除法 - 一个数
+            do {
+                divisor = oneDigit();
+                quotient = oneDigit();
+                dividend = divisor * quotient;
+            } while (dividend > 81);
+            num = oneOrTwoDigit();
+            while (quotient < num) {
+                num = getRandomInt(1, quotient-1);
+            }
+            let question12 = `${dividend} ÷ ${divisor} - ${num} =`;
+            let answer12 = quotient - num;
+            items.push({ html: question12, answer: answer12 });
+
+            // 13-16. 有余数除法4道（只显示算式和等号，无横线省略号）
+            for (let i = 0; i < 4; i++) {
+                divisor = getRandomInt(3, 9);
+                quotient = getRandomInt(2, 9);
+                let remainder = getRandomInt(1, divisor-1);
+                dividend = divisor * quotient + remainder;
+                while (dividend > 200) {
+                    divisor = getRandomInt(3, 9);
+                    quotient = getRandomInt(2, 9);
+                    remainder = getRandomInt(1, divisor-1);
+                    dividend = divisor * quotient + remainder;
+                }
+                let question = `${dividend} ÷ ${divisor} =`;
+                items.push({ html: question, answer: {quotient, remainder} });
+            }
+
+            // 17. 空格设在被除数
+            divisor = oneDigit();
+            quotient = oneDigit();
+            let remainder = getRandomInt(1, divisor-1);
+            dividend = divisor * quotient + remainder;
+            let question17 = `<span class="parentheses"><span class="blank"></span></span> ÷ ${divisor} = ${quotient}<span class="ellipsis">……</span>${remainder}`;
+            items.push({ html: question17, answer: dividend });
+
+            // 18. 空格设在除数
+            divisor = oneDigit();
+            quotient = oneDigit();
+            remainder = getRandomInt(1, divisor-1);
+            dividend = divisor * quotient + remainder;
+            let question18 = `${dividend} ÷ <span class="parentheses"><span class="blank"></span></span> = ${quotient}<span class="ellipsis">……</span>${remainder}`;
+            items.push({ html: question18, answer: divisor });
+
+            // 19. 空格设在商
+            divisor = oneDigit();
+            quotient = oneDigit();
+            remainder = getRandomInt(1, divisor-1);
+            dividend = divisor * quotient + remainder;
+            let question19 = `${dividend} ÷ ${divisor} = <span class="parentheses"><span class="blank"></span></span><span class="ellipsis">……</span>${remainder}`;
+            items.push({ html: question19, answer: quotient });
+
+            // 20. 空格设在余数
+            divisor = oneDigit();
+            quotient = oneDigit();
+            remainder = getRandomInt(1, divisor-1);
+            dividend = divisor * quotient + remainder;
+            let question20 = `${dividend} ÷ ${divisor} = ${quotient}<span class="ellipsis">……</span><span class="parentheses"><span class="blank"></span></span>`;
+            items.push({ html: question20, answer: remainder });
+
+            // 随机打乱数组 (Fisher-Yates)
+            for (let i = items.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [items[i], items[j]] = [items[j], items[i]];
+            }
+
+            // 渲染到页面并存储答案
+            items.forEach(item => {
+                const qDiv = document.createElement('div');
+                qDiv.className = 'question';
+                qDiv.innerHTML = item.html;
+                part1Container.appendChild(qDiv);
+                currentAnswers.part1.push(item.answer);
+            });
+        }
+
+        // ========== 原第三部分：竖式计算1（有余数除法，8题）保持不变 ==========
+        function generatePart3() {
+            const row1Container = document.getElementById('part3-row1');
+            const row2Container = document.getElementById('part3-row2');
+            row1Container.innerHTML = '';
+            row2Container.innerHTML = '';
+            currentAnswers.part3 = [];
+
+            for (let row = 0; row < 2; row++) {
+                for (let col = 0; col < 4; col++) {
+                    const divisor = getRandomInt(3, 9);
+                    const quotient = getRandomInt(3, 9);
+                    const remainder = getRandomInt(1, divisor - 1);
+                    const dividend = divisor * quotient + remainder;
+                    const divisionItem = document.createElement('div');
+                    divisionItem.className = 'division-item';
+                    divisionItem.innerHTML = `<div class="division-question">${dividend} ÷ ${divisor} = </div><div class="division-space"></div>`;
+                    if (row === 0) { row1Container.appendChild(divisionItem); } 
+                    else { row2Container.appendChild(divisionItem); }
+                    currentAnswers.part3.push({ dividend, divisor, quotient, remainder });
+                }
+            }
+        }
+
+        // ========== 原第四部分：竖式计算2（包含验算题，8题）保持不变 ==========
+        function generatePart4() {
+            const row1Container = document.getElementById('part4-row1');
+            const row2Container = document.getElementById('part4-row2');
+            row1Container.innerHTML = '';
+            row2Container.innerHTML = '';
+            currentAnswers.part4 = [];
+
+            // 随机决定“两位数加减两位数”是加法还是减法（只出现一次）
+            let twoDigitType;
+            if (Math.random() > 0.5) {
+                twoDigitType = 'addTwoTwo'; // 两位数加两位数
+            } else {
+                twoDigitType = 'subTwoTwo'; // 两位数减两位数
+            }
+
+            // 定义8种题型（确保每种题型恰好出现一次，包括上面的随机类型）
+            const questionTypes = [
+                twoDigitType,              // 1. 两位数加减两位数（随机加减）
+                'subThreeTwoBorrow',       // 2. 100多减去两位数（退位）
+                'subThreeTwo',             // 3. 普通三位数减两位数
+                'addThreeThreeFour',       // 4. 三位数加三位数（结果是四位数）
+                'addThreeThreeThree',      // 5. 三位数加三位数（结果是三位数）
+                'addThreeTwo',             // 6. 三位数加两位数
+                'subThreeThree',           // 7. 三位数减三位数（结果可为一位/两位/三位）
+                'addTwoThree'              // 8. 两位数加三位数
+            ];
+
+            // 随机打乱顺序
+            const shuffledTypes = [...questionTypes].sort(() => Math.random() - 0.5);
+
+            // 随机选择两个索引作为需要验算的题（带星号）
+            const verificationIndices = [];
+            while (verificationIndices.length < 2) {
+                const randomIndex = getRandomInt(0, 7);
+                if (!verificationIndices.includes(randomIndex)) {
+                    verificationIndices.push(randomIndex);
+                }
+            }
+
+            // 生成8道题目
+            for (let i = 0; i < 8; i++) {
+                const type = shuffledTypes[i];
+                const questionData = generateQuestionByType(type);
+                const needsVerification = verificationIndices.includes(i);
+                const isFirstRow = i < 4;  // 前4题放在第一行，后4题放在第二行
+
+                if (needsVerification) {
+                    // 验算题需要两个竖向虚线框
+                    if (isFirstRow) {
+                        // 第一行的验算题：使用 calculation-item，内部包含两个并排虚线框
+                        const verificationItem = document.createElement('div');
+                        verificationItem.className = 'calculation-item';
+                        verificationItem.innerHTML = `
+                            <div class="calculation-question"><span class="star">*</span>${questionData.num1} ${questionData.operator} ${questionData.num2} = </div>
+                            <div class="verification-container" style="display: flex; gap: 8px; width: 100%; height: 125px;">
+                                <div class="verification-calculation-space" style="flex: 1;"></div>
+                                <div class="verification-space" style="flex: 1;"></div>
+                            </div>
+                        `;
+                        row1Container.appendChild(verificationItem);
+                    } else {
+                        // 第二行的验算题：使用 verification-item 结构
+                        const verificationItem = document.createElement('div');
+                        verificationItem.className = 'verification-item';
+                        verificationItem.innerHTML = `
+                            <div style="display: flex; flex-direction: column; width: 100%;">
+                                <div class="verification-question"><span class="star">*</span>${questionData.num1} ${questionData.operator} ${questionData.num2} = </div>
+                                <div class="verification-container">
+                                    <div class="verification-calculation-space"></div>
+                                    <div class="verification-space"></div>
+                                </div>
+                            </div>
+                        `;
+                        row2Container.appendChild(verificationItem);
+                    }
+                } else {
+                    // 非验算题：只有一个虚线框
+                    const calculationItem = document.createElement('div');
+                    calculationItem.className = 'calculation-item';
+                    if (isFirstRow) {
+                        calculationItem.innerHTML = `<div class="calculation-question">${questionData.num1} ${questionData.operator} ${questionData.num2} = </div><div class="calculation-space"></div>`;
+                        row1Container.appendChild(calculationItem);
+                    } else {
+                        calculationItem.innerHTML = `<div class="calculation-question">${questionData.num1} ${questionData.operator} ${questionData.num2} = </div><div class="calculation-space"></div>`;
+                        row2Container.appendChild(calculationItem);
+                    }
+                }
+
+                // 存储题目数据
+                currentAnswers.part4.push({ 
+                    num1: questionData.num1, 
+                    num2: questionData.num2, 
+                    operator: questionData.operator, 
+                    answer: questionData.answer, 
+                    type,
+                    needsVerification: needsVerification 
+                });
+            }
+
+            // 内部函数：根据题型生成数字（与之前完全相同）
+            function generateQuestionByType(type) {
+                let num1, num2, operator, answer;
+                switch(type) {
+                    case 'addTwoTwo': 
+                        const isThreeDigitResult = Math.random() < 0.8;
+                        if (isThreeDigitResult) {
+                            do { num1 = getRandomInt(10, 99); num2 = getRandomInt(10, 99); } while (num1 + num2 < 100);
+                        } else {
+                            do { num1 = getRandomInt(10, 99); num2 = getRandomInt(10, 99); } while (num1 + num2 >= 100);
+                        }
+                        operator = '+'; answer = num1 + num2; 
+                        break;
+                    case 'subTwoTwo': 
+                        num1 = getRandomInt(30, 99); num2 = getRandomInt(10, num1 - 10); operator = '-'; answer = num1 - num2; 
+                        break;
+                    case 'addTwoThree': 
+                        num1 = getRandomInt(10, 99); num2 = getRandomInt(100, 999); operator = '+'; answer = num1 + num2; 
+                        break;
+                    case 'addThreeTwo': 
+                        num1 = getRandomInt(100, 999); num2 = getRandomInt(10, 99); operator = '+'; answer = num1 + num2; 
+                        break;
+                    case 'addThreeThreeFour': 
+                        do { num1 = getRandomInt(500, 999); num2 = getRandomInt(500, 999); } while (num1 + num2 < 1000);
+                        operator = '+'; answer = num1 + num2; 
+                        break;
+                    case 'addThreeThreeThree': 
+                        do { num1 = getRandomInt(100, 900); num2 = getRandomInt(100, 900); } while (num1 + num2 >= 1000);
+                        operator = '+'; answer = num1 + num2; 
+                        break;
+                    case 'subThreeTwo': 
+                        num1 = getRandomInt(100, 999); num2 = getRandomInt(10, 99);
+                        if (num1 < num2) { [num1, num2] = [num2, num1]; }
+                        operator = '-'; answer = num1 - num2; 
+                        break;
+                    case 'subThreeTwoBorrow': 
+                        do {
+                            num1 = getRandomInt(100, 199);
+                            num2 = getRandomInt(10, 99);
+                            const num1Ones = num1 % 10;
+                            const num2Ones = num2 % 10;
+                            if (num1Ones >= num2Ones) {
+                                num2 = Math.floor(num2 / 10) * 10 + getRandomInt(num1Ones + 1, 9);
+                            }
+                        } while (num1 <= num2);
+                        operator = '-'; answer = num1 - num2; 
+                        break;
+                    case 'subThreeThree': 
+                        const randomValue = Math.random();
+                        if (randomValue < 0.2) {
+                            answer = getRandomInt(1, 9);
+                        } else if (randomValue < 0.4) {
+                            answer = getRandomInt(10, 99);
+                        } else {
+                            answer = getRandomInt(100, 899);
+                        }
+                        num1 = getRandomInt(answer + 100, 999);
+                        num2 = num1 - answer;
+                        if (num2 < 100 || num1 <= num2 || num1 > 999 || num2 > 999) {
+                            return generateQuestionByType(type);
+                        }
+                        operator = '-'; 
+                        break;
+                }
+                return { num1, num2, operator, answer, type };
+            }
+        }
+
+        // 一键生成所有题目
+        function generateAllQuestions() { 
+            generatePart1(); 
+            generatePart3(); 
+            generatePart4(); 
+            console.log("新题目已生成，答案：", currentAnswers); 
+        }
+
+        // PDF下载功能
+        async function downloadPDF() {
+            const loadingElement = document.getElementById('loading');
+            loadingElement.classList.add('show');
+            try {
+                await new Promise(resolve => setTimeout(resolve, 500));
+                const canvas = await html2canvas(document.getElementById('content'), { 
+                    scale: 2, 
+                    useCORS: true, 
+                    logging: false, 
+                    backgroundColor: '#ffffff' 
+                });
+                const { jsPDF } = window.jspdf;
+                const pdf = new jsPDF({ orientation: 'portrait', unit: 'mm', format: 'a4' });
+                const pageWidth = pdf.internal.pageSize.getWidth();
+                const imgWidth = pageWidth - 20;
+                const imgHeight = (canvas.height * imgWidth) / canvas.width;
+                const imgData = canvas.toDataURL('image/jpeg', 1.0);
+                pdf.addImage(imgData, 'JPEG', 10, 10, imgWidth, imgHeight);
+                pdf.save('二下计算练习.pdf');
+                loadingElement.classList.remove('show');
+            } catch (error) { 
+                console.error('生成PDF时出错:', error); 
+                loadingElement.classList.remove('show'); 
+                alert('生成PDF失败，请重试或使用打印功能。'); 
+            }
+        }
+
+        // 事件绑定
+        document.addEventListener('DOMContentLoaded', function() {
+            generateAllQuestions();
+
+            document.getElementById('generateQuestions').addEventListener('click', generateAllQuestions);
+            document.getElementById('downloadPdf').addEventListener('click', downloadPDF);
+        });
+
+        // 打印时隐藏控制按钮 (虽已删除打印按钮，但保留以防万一)
+        window.addEventListener('beforeprint', function() { document.querySelector('.controls').style.display = 'none'; });
+        window.addEventListener('afterprint', function() { document.querySelector('.controls').style.display = 'flex'; });
+    </script>
+</body>
+</html>
